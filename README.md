@@ -1,14 +1,27 @@
 # Free TC Generator (자동 테스트케이스 생성기)
 
-기획서 문서에서 자동으로 테스트케이스를 생성하는 시스템입니다.
+기획서 문서에서 QA 관점의 테스트케이스를 자동으로 생성하는 시스템입니다.
 
-## 기능
+## 핵심 기능
 
-- DOCX, PDF 문서에서 텍스트 추출 및 청크 분할
-- 텍스트 임베딩을 통한 벡터 DB 구축
-- RAG 방식으로 테스트케이스 자동 생성
-- 테스트케이스 검증 및 피드백 제공
-- 엑셀 형식으로 결과 내보내기
+- **QA 관점의 테스트케이스 생성**: 단순 기획서 항목이 아닌, 실제로 검증해야 할 UI, 기능, 예외 상황을 포함한 테스트케이스 생성
+- **지능적인 조건 분석**: 기획서의 조건문(ENABLE_USE_ITEM = TRUE 등)을 추출하고 QA 테스트 관점으로 변환
+- **UI 및 예외 상황 포함**: 버튼 노출, 팝업 표시, 에러 메시지 등 사용자 경험 확인 포인트 자동 생성
+- **DOCX, PDF 문서 지원**: 다양한 형식의 기획서 처리 가능
+- **테스트케이스 품질 검증**: 생성된 테스트케이스의 정확성, 완전성, 명확성 평가
+
+## 테스트케이스 변환 규칙
+
+프로그램은 기획서의 다음과 같은 패턴을 자동으로 QA 테스트케이스로 변환합니다:
+
+| 기획서 조건 | QA 테스트케이스 |
+|------------|----------------|
+| ENABLE_USE_ITEM = TRUE | 사용 버튼이 노출되는지 확인 |
+| STACK = 1 | 겹치기 불가일 때 수량 표시가 없는지 확인 |
+| IS_DELETE = TRUE | 버리기 버튼이 표시되는지 확인 |
+| GRADE = LEGEND | 아이템 색상이 주황색으로 표시되는지 확인 |
+
+이 외에도 많은 UI 상호작용 및 예외 상황에 대한 규칙을 포함하고 있습니다.
 
 ## 설치 방법
 
@@ -21,7 +34,7 @@
 
 ```bash
 # 저장소 복제
-git clone https://github.com/chchan234/free_tc_generator.git
+git clone https://github.com/your-username/free_tc_generator.git
 cd free_tc_generator
 
 # 설치 스크립트 실행
@@ -32,7 +45,7 @@ python install.py
 
 ```bash
 # 저장소 복제
-git clone https://github.com/chchan234/free_tc_generator.git
+git clone https://github.com/your-username/free_tc_generator.git
 cd free_tc_generator
 
 # 필요한 디렉토리 생성
@@ -54,37 +67,29 @@ python run_app.py
 
 웹 브라우저에서 표시되는 주소(예: http://localhost:8501)로 접속하여 사용할 수 있습니다.
 
-## Streamlit Cloud 배포
-
-이 프로젝트는 Streamlit Community Cloud에 쉽게 배포할 수 있도록 설정되어 있습니다.
-
-### 배포 방법
-
-1. Streamlit Community Cloud에 로그인 (https://streamlit.io/cloud)
-2. "New app" 버튼 클릭
-3. 다음 설정으로 앱 배포:
-   - **Repository**: `chchan234/free_tc_generator` (또는 귀하의 포크)
-   - **Branch**: `main`
-   - **Main file path**: `ui/app.py`
-   - **Python version**: `3.10` (권장)
-
-### 배포 구성 파일
-
-프로젝트에는 Streamlit Cloud 배포에 필요한 다음 구성 파일이 포함되어 있습니다:
-
-- **requirements.txt**: 파이썬 패키지 의존성
-- **packages.txt**: 시스템 패키지 의존성 (Rust 컴파일러 등)
-- **setup.sh**: 배포 환경 초기화 스크립트
-- **.streamlit/config.toml**: Streamlit 설정
-
 ## 사용 방법
 
 1. **문서 업로드**: DOCX 또는 PDF 기획서를 업로드합니다.
 2. **데이터 처리**: 문서를 텍스트로 추출하고 청크로 분할합니다.
 3. **임베딩 생성**: 텍스트 청크를 벡터로 변환합니다.
-4. **테스트케이스 생성**: RAG 방식으로 테스트케이스를 생성합니다.
-5. **검증 및 피드백**: 생성된 테스트케이스를 검증하고 피드백을 제공받습니다.
+4. **테스트케이스 생성**: 조건 추출 및 QA 관점 변환을 통해 테스트케이스를 생성합니다.
+5. **검증 및 피드백**: 생성된 테스트케이스의 품질을 평가합니다.
 6. **엑셀 내보내기**: 최종 결과를 엑셀 파일로 다운로드합니다.
+
+## QA 테스트케이스 예시
+
+| 대분류 | 중분류 | 소분류 | 확인내용 | 결과 | 비고 |
+|--------|-------|-------|---------|-----|-----|
+| 아이템 시스템 | 아이템 사용 | ENABLE_USE_ITEM | 사용 버튼이 노출되는지 확인 | | 조건별 UI 노출 여부 |
+| 아이템 시스템 | 인벤토리 표시 | STACK | 겹치기 불가일 때 수량 표시가 없는지 확인 | | 아이콘 개수 표시 여부 |
+| 아이템 시스템 | 아이템 삭제 | IS_DELETE | 버리기 버튼이 표시되는지 확인 | | 삭제 권한 확인 |
+| 아이템 시스템 | 아이템 등급 | GRADE | 레전드 등급 아이템이 주황색으로 표시되는지 확인 | | 등급별 색상 구분 |
+
+## 확장 및 커스터마이징
+
+- `engine/rag_engine.py`의 `TC_TRANSFORMATION_RULES` 딕셔너리에 새로운 필드 규칙 추가 가능
+- `UI_INTERACTION_PATTERNS`와 `EXCEPTION_PATTERNS`에 새로운 패턴 추가 가능
+- `extract_conditional_statements` 함수에 추가 정규식 패턴 정의 가능
 
 ## 문제 해결
 

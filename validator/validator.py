@@ -40,6 +40,30 @@ PC: {pc}
 - 개선 제안:
 """
 
+# 좋은 확인내용 패턴 (QA 관점의 테스트 케이스)
+GOOD_CONTENT_PATTERNS = [
+    r"버튼이.*노출",
+    r"버튼이.*비활성화",
+    r"표시.*확인",
+    r"정상.*동작",
+    r"적용.*확인",
+    r"오류.*메시지",
+    r"알림.*표시",
+    r"UI.*표시",
+    r"경고.*노출",
+    r"팝업.*표시"
+]
+
+# 미흡한 확인내용 패턴 (단순 기술적 조건 확인)
+POOR_CONTENT_PATTERNS = [
+    r"이.*동작",
+    r"가.*동작",
+    r".*값.*확인",
+    r"TRUE|FALSE",
+    r"설정.*확인",
+    r"^조건.*확인$"
+]
+
 class TestcaseValidator:
     """테스트케이스 검증 클래스"""
     
@@ -58,9 +82,6 @@ class TestcaseValidator:
         Returns:
             검증 결과
         """
-        # 여기서는 실제 LLM 구현이 없으므로 예시 검증 결과만 반환
-        # 실제 구현에서는 Ollama나 다른 로컬 LLM을 사용
-        
         # 테스트케이스 정보 추출
         major = testcase.get("대분류", "")
         medium = testcase.get("중분류", "")
@@ -73,29 +94,114 @@ class TestcaseValidator:
         pc = testcase.get("PC", "")
         note = testcase.get("비고", "")
         
-        # 예시 검증 결과 - 실제 구현에서는 LLM 응답으로 대체
+        # 점수 초기화
+        accuracy = 0  # 정확성
+        completeness = 0  # 완전성
+        clarity = 0  # 명확성
+        platform_relevance = 0  # 플랫폼 적합성
+        
+        # 1. 정확성 평가
+        # - 원본 내용에 관련 키워드가 포함되어 있는지 확인
+        if minor and re.search(minor, original_content, re.IGNORECASE):
+            accuracy += 5  # 소분류가 원본에 포함됨
+        elif medium and re.search(medium, original_content, re.IGNORECASE):
+            accuracy += 3  # 중분류가 원본에 포함됨
+        
+        # - 확인내용이 구체적인지 확인
+        if content:
+            is_qa_perspective = False
+            for pattern in GOOD_CONTENT_PATTERNS:
+                if re.search(pattern, content):
+                    is_qa_perspective = True
+                    break
+            
+            if is_qa_perspective:
+                accuracy += 5  # QA 관점의 구체적인 확인내용
+            else:
+                for pattern in POOR_CONTENT_PATTERNS:
+                    if re.search(pattern, content):
+                        accuracy += 2  # 단순 조건 확인
+                        break
+                else:
+                    accuracy += 3  # 그 외 경우
+        
+        # 2. 완전성 평가
+        # - 필수 필드가 채워져 있는지 확인
+        if major:
+            completeness += 2
+        if medium:
+            completeness += 2
+        if minor:
+            completeness += 2
+        if content:
+            completeness += 4
+        
+        # 3. 명확성 평가
+        # - 확인내용의 품질 평가
+        if content:
+            # 확인내용이 구체적인지 (단어 수, 명확한 설명 포함 여부)
+            if len(content.split()) >= 6:
+                clarity += 5  # 상세한 설명
+            elif len(content.split()) >= 4:
+                clarity += 3  # 적당한 설명
+            else:
+                clarity += 1  # 간단한 설명
+            
+            # 특정 동작이나 검증 방법이 명시되어 있는지
+            if "확인" in content or "검증" in content or "테스트" in content:
+                clarity += 3
+            
+            # UI 또는 사용자 상호작용을 포함하는지
+            if "UI" in content or "버튼" in content or "표시" in content or "화면" in content:
+                clarity += 2
+        
+        # 4. 플랫폼 적합성 평가
+        # - 플랫폼 정보 지정 여부
+        platform_count = sum(1 for p in [ad, ios, pc] if p)
+        if platform_count == 3:
+            platform_relevance += 5  # 모든 플랫폼 지정
+        elif platform_count > 0:
+            platform_relevance += 3  # 일부 플랫폼 지정
+        
+        # - 플랫폼별 특성 고려 여부
+        if "버튼" in content or "UI" in content or "화면" in content:
+            platform_relevance += 3  # UI 관련 내용
+        if "네트워크" in content or "연결" in content:
+            platform_relevance += 2  # 네트워크 관련 내용
+        
+        # 점수 정규화 (1-10 범위로)
+        accuracy = min(10, max(1, accuracy))
+        completeness = min(10, max(1, completeness))
+        clarity = min(10, max(1, clarity))
+        platform_relevance = min(10, max(1, platform_relevance))
+        
+        # 총점 계산
+        total_score = (accuracy + completeness + clarity + platform_relevance) / 4.0
+        
+        # 개선 제안 생성
+        improvement_suggestions = []
+        if accuracy < 7:
+            improvement_suggestions.append("기획서 내용을 더 정확히 반영할 필요가 있습니다.")
+        if completeness < 7:
+            improvement_suggestions.append("테스트케이스에 더 많은 정보를 포함해야 합니다.")
+        if clarity < 7:
+            improvement_suggestions.append("확인내용을 더 명확하고 구체적으로 작성해야 합니다.")
+        if platform_relevance < 7:
+            improvement_suggestions.append("플랫폼별 특성을 더 고려한 테스트케이스가 필요합니다.")
+        
+        if not improvement_suggestions:
+            improvement_suggestions.append("테스트케이스가 잘 작성되었습니다.")
+        
+        # 최종 검증 결과
         validation_result = {
-            "정확성": 8,
-            "완전성": 7,
-            "명확성": 9,
-            "플랫폼_적합성": 8,
-            "총점": 8.0,
-            "개선_제안": "소분류에 좀더 구체적인 내용을 추가하면 좋겠습니다.",
-            "통과_여부": True
+            "정확성": int(accuracy),
+            "완전성": int(completeness),
+            "명확성": int(clarity),
+            "플랫폼_적합성": int(platform_relevance),
+            "총점": round(total_score, 1),
+            "개선_제안": " ".join(improvement_suggestions),
+            "통과_여부": total_score >= 7.0
         }
-        
-        # 플랫폼별 검증 결과 점수 조정
-        # 만약 플랫폼 정보가 있다면 플랫폼 적합성 점수 추가 반영
-        if ad or ios or pc:
-            validation_result["플랫폼_적합성"] = min(10, validation_result["플랫폼_적합성"] + 1)
-        
-        # 총점 재계산
-        validation_result["총점"] = (
-            validation_result["정확성"] + 
-            validation_result["완전성"] + 
-            validation_result["명확성"] + 
-            validation_result["플랫폼_적합성"]
-        ) / 4.0
         
         return validation_result
 
