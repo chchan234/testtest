@@ -7,14 +7,33 @@ from typing import List, Dict, Any, Union
 import docx
 import fitz  # PyMuPDF
 import re
-import nltk
-from nltk.tokenize import sent_tokenize
 
-# nltk 데이터 필요시 다운로드
+# nltk 없이도 작동하는 간단한 문장 분리 함수
+def simple_sent_tokenize(text):
+    """nltk 없이 기본적인 문장 분리를 수행합니다."""
+    # 마침표, 물음표, 느낌표 뒤에 공백이 있는 경우로 분리
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    # 빈 문장 제거
+    return [s.strip() for s in sentences if s.strip()]
+
+# nltk 가져오기 시도
 try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt', quiet=True)
+    import nltk
+    from nltk.tokenize import sent_tokenize
+    
+    # nltk 데이터 필요시 다운로드
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt', quiet=True)
+    
+    # nltk가 있으면 sent_tokenize 함수 사용
+    sentence_tokenizer = sent_tokenize
+    print("NLTK 패키지를 사용합니다.")
+except ImportError:
+    # nltk가 없으면 simple_sent_tokenize 함수 사용
+    sentence_tokenizer = simple_sent_tokenize
+    print("NLTK 패키지가 없어 기본 문장 분리 기능을 사용합니다.")
 
 def extract_text(file_path: str) -> str:
     """
