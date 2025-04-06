@@ -236,6 +236,250 @@ def transform_to_qa_testcase(conditions: List[Dict[str, Any]], context: str) -> 
     
     return testcase
 
+def split_into_sentences(text: str) -> List[str]:
+    """
+    텍스트를 문장 단위로 분리합니다.
+    
+    Args:
+        text: 분할할 텍스트
+        
+    Returns:
+        문장 리스트
+    """
+    # 문장 구분 패턴: 마침표, 물음표, 느낌표 뒤에 공백이 있는 경우
+    # 한국어 문장 구분 고려
+    sentence_delimiters = r'(?<=[.!?])\s+|(?<=。|\n|\r)'
+    sentences = re.split(sentence_delimiters, text)
+    
+    # 빈 문장 제거
+    sentences = [s.strip() for s in sentences if s.strip()]
+    return sentences
+
+def should_skip_sentence(sentence: str) -> bool:
+    """
+    테스트케이스 생성에서 제외할 문장인지 확인합니다.
+    
+    Args:
+        sentence: 확인할 문장
+        
+    Returns:
+        제외 여부 (True면 제외)
+    """
+    # 건너뛸 패턴
+    skip_patterns = [
+        r'^목차',
+        r'^제\s*\d+\s*장',  # 제1장, 제 2 장 등
+        r'^[0-9.]+\s*소개',
+        r'^참고',
+        r'^주의',
+        r'^메모',
+        r'^노트',
+        r'^Table of Contents',
+        r'^Index',
+        r'^Figure',
+        r'^표\s*\d+',  # 표 1, 표2 등
+        r'^그림\s*\d+',  # 그림 1, 그림2 등
+        r'^\s*$',  # 빈 줄
+        r'^[A-Za-z0-9]+(\.[A-Za-z0-9]+)*\s*$',  # 단순 버전 표기
+        r'^@',  # 이메일이나 참조
+        r'^\d+\.\d+\.\d+$',  # 버전 번호만 있는 경우
+        r'^\*\*',  # 마크다운 강조 텍스트
+        r'^#+\s',  # 마크다운 헤더
+        r'^-{3,}$', # 구분선
+        r'^\[\d+\]$',  # 참조 번호
+    ]
+    
+    # 문장이 짧으면 건너뜀 (최소 10자)
+    if len(sentence) < 10:
+        return True
+    
+    # 패턴에 해당하면 건너뜀
+    for pattern in skip_patterns:
+        if re.search(pattern, sentence):
+            return True
+    
+    return False
+
+def filter_and_extract_conditions_from_sentence(sentence: str) -> List[Dict[str, Any]]:
+    """
+    한 문장에서 조건을 추출하고 필터링합니다.
+    
+    Args:
+        sentence: 분석할 문장
+        
+    Returns:
+        조건 정보 목록
+    """
+    # 문장에서 조건 추출
+    conditions = extract_conditional_statements(sentence)
+    
+    # 다음과 같은 경우 고려:
+    # 1. 조건이 없어도 문장이 특정 키워드 포함하면 의미있을 수 있음
+    if not conditions:
+        important_keywords = [
+            "버튼", "클릭", "팝업", "화면", "표시", "인터페이스", "UI", 
+            "선택", "입력", "스왑", "드래그", "최대", "최소", "제한", 
+            "오류", "에러", "예외", "네트워크", "연결", "배치", "상태",
+            "아이템", "장착", "사용", "스킬", "캐릭터", "레벨", "경험치",
+            "퀘스트", "미션", "전투", "공성전", "보상", "재화", "구매"
+        ]
+        
+        # 중요 키워드가 있는지 확인
+        has_keyword = any(keyword in sentence for keyword in important_keywords)
+        
+        # 중요 키워드가 없으면 빈 리스트 반환
+        if not has_keyword:
+            return []
+        
+        # 중요 키워드가 있으면 일반 조건으로 가정하고 진행
+        # 기획 또는 기능 관련 일반 설명으로 처리
+        conditions = [{
+            "field": "GENERAL_FEATURE",
+            "value": "DESCRIBED",
+            "original": sentence
+        }]
+    
+    return conditions
+
+def determine_medium_category(context: str) -> str:
+    """
+    컨텍스트를 기반으로 중분류를 결정합니다.
+    
+    Args:
+        context: 분석할 컨텍스트
+        
+    Returns:
+        중분류명
+    """
+    # 컨텍스트에서 중분류 추정
+    if "장착" in context or "착용" in context or "장비" in context:
+        return "아이템 장착"
+    elif "사용" in context or "소모" in context or "소비" in context:
+        return "아이템 사용"
+    elif "구매" in context or "상점" in context or "구입" in context:
+        return "아이템 구매"
+    elif "판매" in context or "매각" in context:
+        return "아이템 판매"
+    elif "버리기" in context or "삭제" in context or "폐기" in context:
+        return "아이템 삭제"
+    elif "등급" in context or "희귀도" in context or "티어" in context:
+        return "아이템 등급"
+    elif "보관" in context or "창고" in context or "저장" in context:
+        return "아이템 보관"
+    elif "조합" in context or "제작" in context or "크래프팅" in context:
+        return "아이템 제작"
+    elif "강화" in context or "업그레이드" in context:
+        return "아이템 강화"
+    elif "획득" in context or "드랍" in context or "보상" in context:
+        return "아이템 획득"
+    else:
+        return "기본 기능"
+
+def generate_multiple_testcases_from_sentence(sentence: str, context: str) -> List[Dict[str, str]]:
+    """
+    한 문장에서 여러 테스트케이스를 생성합니다.
+    
+    Args:
+        sentence: 분석할 문장
+        context: 원본 컨텍스트 (주변 문장 포함)
+        
+    Returns:
+        테스트케이스 목록
+    """
+    # 조건 추출
+    conditions = filter_and_extract_conditions_from_sentence(sentence)
+    
+    # 조건이 없으면 빈 리스트 반환
+    if not conditions:
+        return []
+    
+    # 기본 테스트케이스 구조 생성
+    base_testcase = {
+        "대분류": "아이템 시스템",  # 기본값, 문맥에 따라 변경될 수 있음
+        "중분류": "",
+        "소분류": "",
+        "확인내용": "",
+        "결과": "",
+        "비고": ""
+    }
+    
+    # 문맥 기반 대분류 설정
+    if "인벤토리" in context or "보관" in context or "소지품" in context:
+        base_testcase["대분류"] = "인벤토리 시스템"
+    elif "퀘스트" in context or "미션" in context or "임무" in context:
+        base_testcase["대분류"] = "퀘스트 시스템"
+    elif "스킬" in context or "능력" in context or "스펙" in context:
+        base_testcase["대분류"] = "스킬 시스템"
+    elif "상점" in context or "구매" in context or "판매" in context:
+        base_testcase["대분류"] = "상점 시스템"
+    elif "전투" in context or "공격" in context or "방어" in context:
+        base_testcase["대분류"] = "전투 시스템"
+    
+    # 문맥 기반 중분류 설정 (기본값)
+    base_testcase["중분류"] = determine_medium_category(context)
+    
+    # 조건별 테스트케이스 생성
+    testcases = []
+    
+    # 일반적인 설명 문장이면 (GENERAL_FEATURE)
+    if len(conditions) == 1 and conditions[0]["field"] == "GENERAL_FEATURE":
+        # 일반 기능 설명에서 테스트케이스 생성
+        testcase = base_testcase.copy()
+        testcase["소분류"] = "일반 기능"
+        
+        # UI 및 상호작용 패턴 확인
+        check_content = ""
+        for pattern, check in UI_INTERACTION_PATTERNS.items():
+            if re.search(pattern, sentence):
+                check_content = check
+                break
+        
+        # 예외 상황 패턴 확인
+        if not check_content:
+            for pattern, check in EXCEPTION_PATTERNS.items():
+                if re.search(pattern, sentence):
+                    check_content = check
+                    break
+        
+        # 패턴이 없으면 일반 확인 내용
+        if not check_content:
+            check_content = f"'{sentence}' 기능이 기획서 내용대로 동작하는지 확인"
+        
+        testcase["확인내용"] = check_content
+        testcase["비고"] = "기획서 일반 설명 기반"
+        testcases.append(testcase)
+    else:
+        # 조건별 테스트케이스 생성
+        for condition in conditions:
+            testcase = base_testcase.copy()
+            field = condition["field"]
+            value = condition["value"]
+            
+            # 소분류 설정
+            testcase["소분류"] = field
+            
+            # 확인내용 생성
+            if field in TC_TRANSFORMATION_RULES:
+                rule_map = TC_TRANSFORMATION_RULES[field]
+                
+                if value in rule_map:
+                    check_content = rule_map[value]
+                elif "DEFAULT" in rule_map:
+                    # DEFAULT 규칙이 있을 경우 값을 포맷팅
+                    check_content = rule_map["DEFAULT"].replace("{value}", str(value))
+                else:
+                    # 기본 포맷
+                    check_content = f"{field}가 {value}일 때 동작 확인"
+            else:
+                # 알려진 룰이 없는 조건은 일반적인 확인내용 생성
+                check_content = f"{field}가 {value}인 경우 올바르게 동작하는지 확인"
+            
+            testcase["확인내용"] = check_content
+            testcase["비고"] = f"조건: {condition['original']}"
+            testcases.append(testcase)
+    
+    return testcases
+
 class RAGEngine:
     """RAG 기반 테스트케이스 생성 엔진"""
     
@@ -313,10 +557,24 @@ def process_rag(vector_db, user_query: str, n_results: int = 5) -> List[Dict[str
     # 컨텍스트 통합
     context = "\n\n".join([chunk['text'] for chunk in relevant_chunks])
     
-    # 테스트케이스 생성
-    testcase = rag_engine.generate_testcase(user_query, context)
+    # 문장 분리 및 테스트케이스 생성
+    testcases = []
+    sentences = split_into_sentences(context)
     
-    return [testcase]
+    for sentence in sentences:
+        if should_skip_sentence(sentence):
+            continue
+        
+        # 문장별 테스트케이스 생성
+        sentence_testcases = generate_multiple_testcases_from_sentence(sentence, context)
+        testcases.extend(sentence_testcases)
+    
+    # 결과가 없으면 기본 테스트케이스 추가
+    if not testcases:
+        testcase = rag_engine.generate_testcase(user_query, context)
+        testcases.append(testcase)
+    
+    return testcases
 
 def generate_testcases(vector_db, document_chunks: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     """
@@ -329,20 +587,26 @@ def generate_testcases(vector_db, document_chunks: List[Dict[str, Any]]) -> List
     Returns:
         생성된 테스트케이스 목록
     """
-    rag_engine = RAGEngine(vector_db)
     testcases = []
     
-    # 모든 청크 처리
+    # 청크별로 처리
     for chunk in document_chunks:
-        # 각 청크를 컨텍스트로 사용
+        # 청크 텍스트 가져오기
         context = chunk['text']
         
-        # 조건문 추출
-        conditions = extract_conditional_statements(context)
+        # 문장 단위로 분리
+        sentences = split_into_sentences(context)
         
-        # 조건이 있는 경우만 테스트케이스 생성
-        if conditions:
-            testcase = transform_to_qa_testcase(conditions, context)
-            testcases.append(testcase)
+        # 문장별로 테스트케이스 생성
+        for sentence in sentences:
+            # 건너뛸 문장 확인
+            if should_skip_sentence(sentence):
+                continue
+            
+            # 문장에서 테스트케이스 생성
+            sentence_testcases = generate_multiple_testcases_from_sentence(sentence, context)
+            
+            # 생성된 테스트케이스가 있으면 추가
+            testcases.extend(sentence_testcases)
     
     return testcases
