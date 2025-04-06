@@ -1,0 +1,1 @@
+web: cd tools && bash install_rust.sh && cd .. && streamlit run ui/app.py

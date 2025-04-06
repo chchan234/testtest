@@ -1,0 +1,5 @@
+build-essential
+curl
+python3-dev
+rustc
+cargo
